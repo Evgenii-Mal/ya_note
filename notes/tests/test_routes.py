@@ -1,7 +1,7 @@
 from http import HTTPStatus
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.urls import reverse
 
 from notes.models import Note
@@ -18,6 +18,10 @@ class TestRoutes(TestCase):
         cls.note = Note.objects.create(
             title='Заголовок', text='Текст',
             author=cls.author)
+        cls.author_client = Client()
+        cls.author_client.force_login(cls.author)
+        cls.reader_client = Client()
+        cls.reader_client.force_login(cls.reader)
 
     def test_pages_availability(self):
         urls = ('notes:home', 'users:signup', 'users:login', 'users:logout')
@@ -29,11 +33,10 @@ class TestRoutes(TestCase):
 
     def test_detail_available(self):
         users_statuses = (
-            (self.author, HTTPStatus.OK),
-            (self.reader, HTTPStatus.NOT_FOUND),
+            (self.author_client, HTTPStatus.OK),
+            (self.reader_client, HTTPStatus.NOT_FOUND),
         )
         for user, status in users_statuses:
-            self.client.force_login(user)
             names = (
                 ('notes:detail', (self.note.slug,)),
                 ('notes:edit', (self.note.slug,)),
@@ -41,7 +44,7 @@ class TestRoutes(TestCase):
             for name, args in names:
                 with self.subTest(user=user, name=name):
                     url = reverse(name, args=args)
-                    response = self.client.get(url)
+                    response = user.get(url)
                     self.assertEqual(response.status_code, status)
 
     def test_redirect(self):
@@ -62,11 +65,9 @@ class TestRoutes(TestCase):
                 self.assertRedirects(response, redirect_url)
 
     def test_add_list_success_available(self):
-        user = self.author
-        self.client.force_login(user)
         names = ('notes:add', 'notes:list', 'notes:success')
         for name in names:
             with self.subTest(name=name):
                 url = reverse(name)
-                response = self.client.get(url)
+                response = self.author_client.get(url)
                 self.assertEqual(response.status_code, HTTPStatus.OK)
